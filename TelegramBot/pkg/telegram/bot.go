@@ -35,6 +35,7 @@ func (tgb *TgBot) RunBot() {
 	)
 	db.Connect()
 	for upd := range tgb.Updates {
+		db.StatConn()
 		if upd.Message == nil {
 			continue
 		}
@@ -119,8 +120,8 @@ func (tgb *TgBot) handleMessage(message *tgbotapi.Message, command string, db da
 			}
 		}
 	case "del":
-		service := model.SplitData(message.Text)
 		if strings.Contains(message.Text, "Service ") || strings.Contains(message.Text, "Service: ") || strings.Contains(message.Text, "service ") || strings.Contains(message.Text, "service: ") {
+			service := model.SplitData(message.Text)
 			data, err = db.DataEntity.GetData(db.Pool, message.Chat.ID, service)
 			if err != nil {
 				msg.Text = "I think, you send uncorrected name of service!"
@@ -132,13 +133,13 @@ func (tgb *TgBot) handleMessage(message *tgbotapi.Message, command string, db da
 				return nil
 			}
 		} else {
-			data, err = db.DataEntity.GetData(db.Pool, message.Chat.ID, message.Text)
+			err = db.DataEntity.DelData(db.Pool, message.Chat.ID, message.Text)
 			if err != nil {
 				msg.Text = "I think, you send uncorrected name of service!"
 				tgb.Bot.Send(msg)
 				return err
 			} else {
-				msg.Text = fmt.Sprintf("I delete your data about %s", service)
+				msg.Text = fmt.Sprintf("I delete your data about %s", message.Text)
 				tgb.Bot.Send(msg)
 				return nil
 			}

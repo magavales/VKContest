@@ -7,7 +7,7 @@ import (
 )
 
 type Database struct {
-	Pool       *pgx.Conn
+	Pool       *pgx.ConnPool
 	DataEntity tables.DataEntity
 }
 
@@ -19,10 +19,22 @@ func (db *Database) Connect() {
 		User:     "postgres",
 		Password: "1703",
 	}
+	poolConn := pgx.ConnPoolConfig{
+		ConnConfig:     config,
+		MaxConnections: 5,
+		AfterConnect:   nil,
+		AcquireTimeout: 0,
+	}
 
 	var err error
-	db.Pool, err = pgx.Connect(config)
+	db.Pool, err = pgx.NewConnPool(poolConn)
 	if err != nil {
 		log.Printf("I can't connect to database: %s\n", err)
+	}
+}
+
+func (db *Database) StatConn() {
+	if db.Pool.Stat().MaxConnections == 4 {
+		db.Pool.Close()
 	}
 }
