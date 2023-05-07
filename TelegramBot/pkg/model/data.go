@@ -22,7 +22,9 @@ func (d *Data) parseData(message *tgbotapi.Message) (string, string, string) {
 }
 
 func (d *Data) Add(message *tgbotapi.Message) {
-	_, _, password := d.parseData(message)
-
+	service, login, password := d.parseData(message)
+	d.ChatID = message.Chat.ID
+	d.Service = service
+	d.Login = login
 	d.Password = password
 }
