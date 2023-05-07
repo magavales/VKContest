@@ -12,19 +12,22 @@ type Data struct {
 	Password string
 }
 
-func (d *Data) parseData(message *tgbotapi.Message) (string, string, string) {
-	strs := strings.Split(message.Text, "\n")
-	service := strings.Split(strs[0], " ")
-	login := strings.Split(strs[1], " ")
-	password := strings.Split(strs[2], " ")
+func SplitData(str string) string {
+	newstr := strings.Split(str, " ")
 
-	return service[1], login[1], password[1]
+	return newstr[1]
 }
 
 func (d *Data) Add(message *tgbotapi.Message) {
-	service, login, password := d.parseData(message)
+	strs := strings.Split(message.Text, "\n")
 	d.ChatID = message.Chat.ID
-	d.Service = service
-	d.Login = login
-	d.Password = password
+	d.Service = SplitData(strs[0])
+	d.Login = SplitData(strs[1])
+	d.Password = SplitData(strs[2])
+}
+
+func (d *Data) ParseData(value []interface{}) {
+	d.Service = value[2].(string)
+	d.Login = value[3].(string)
+	d.Password = value[4].(string)
 }
