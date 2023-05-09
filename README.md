@@ -3,15 +3,15 @@
 
 1. "/set" - запускает диалог с пользователем, в ходе которого вводиться название сервиса, логин и пароль, затем эти данные сохраняются в базе данных.
 
-   ![Screenshot_1](magavales\VKContest\screen\Screenshot_1.png)
+   ![Screenshot_1](screen\Screenshot_1.png)
 
 2. "/get" - запускает диалог с пользователем, где вводится имя сервиса, от которого необходимо получить логин и пароль.
 
-   ![Screenshot_2](magavales\VKContest\screen\Screenshot_2.png)
+   ![Screenshot_2](screen\Screenshot_2.png)
 
 3. "/del" - запускает диалог с пользователем, где вводится имя сервиса, от которого необходимо удалить логин и пароль из базы данных.
 
-   ![Screenshot_3](magavales\VKContest\screen\Screenshot_3.png)
+   ![Screenshot_3](screen\Screenshot_3.png)
 
 4. Также все сообщения в чате удаляются спустя 30 секунд.
 
