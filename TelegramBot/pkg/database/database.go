@@ -7,8 +7,8 @@ import (
 )
 
 type Database struct {
-	Pool       *pgx.ConnPool
-	DataEntity tables.DataEntity
+	Pool   *pgx.ConnPool
+	Access tables.DataAccess
 }
 
 func (db *Database) Connect() {

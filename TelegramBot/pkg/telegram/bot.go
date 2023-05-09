@@ -2,12 +2,15 @@ package telegram
 
 import (
 	"TelegramBot/pkg/database"
-	"TelegramBot/pkg/model"
-	"errors"
+	"TelegramBot/pkg/dialog"
+	"TelegramBot/pkg/telegram/handler"
+	"TelegramBot/pkg/telegram/handler/del"
+	"TelegramBot/pkg/telegram/handler/get"
+	"TelegramBot/pkg/telegram/handler/set"
 	"fmt"
 	"github.com/Syfaro/telegram-bot-api"
 	"log"
-	"strings"
+	"time"
 )
 
 type TgBot struct {
@@ -15,6 +18,8 @@ type TgBot struct {
 	Uconf   tgbotapi.UpdateConfig
 	Updates tgbotapi.UpdatesChannel
 }
+
+var dao database.Database
 
 func (tgb *TgBot) InitBot(token string) {
 	var err error
@@ -29,137 +34,103 @@ func (tgb *TgBot) InitBot(token string) {
 }
 
 func (tgb *TgBot) RunBot() {
-	var (
-		lastCommand string
-		db          database.Database
-	)
-	db.Connect()
+	dao = initDatabase()
 	for upd := range tgb.Updates {
-		db.StatConn()
+		dao.StatConn()
 		if upd.Message == nil {
 			continue
 		}
 
 		if upd.Message.IsCommand() {
-			lastCommand = tgb.handleCommand(upd.Message)
+			tgb.handleCommand(upd.Message)
 		} else {
-			err := tgb.handleMessage(upd.Message, lastCommand, db)
-			if err == nil {
-				lastCommand = ""
-			}
+			tgb.handleMessage(upd.Message)
 		}
 	}
 }
 
-func (tgb *TgBot) handleCommand(message *tgbotapi.Message) string {
+func initDatabase() database.Database {
+	var db database.Database
+	db.Connect()
+	return db
+}
+
+func (tgb *TgBot) handleCommand(message *tgbotapi.Message) (string, error) {
 	msg := tgbotapi.NewMessage(message.Chat.ID, "")
 
+	go tgb.delayedDelete(message.Chat.ID, message.MessageID)
 	switch message.Command() {
 	case "start":
 		msg.Text = fmt.Sprintf("Hello! I'm BotStorage. I can save your login and password from anything services, if you want.\n\n\n%s, you are so cute!", message.From.UserName)
-		tgb.Bot.Send(msg)
+		tgb.warningForExplosions(message.Chat.ID)
 	case "set":
-		msg.Text = "Ok. You can trust me your personal data. PLease use this format:\nService: Telegram\nLogin: user\nPassword: 123"
-		tgb.Bot.Send(msg)
+		msg.Text = "Ok. You can trust me your personal data. Write name of service:"
+		dialog.SetState(message.Chat.ID, dialog.State{
+			Type:  dialog.Set,
+			Name:  dialog.Service,
+			Value: "",
+		})
+		tgb.warningForExplosions(message.Chat.ID)
 	case "get":
 		msg.Text = "Ok. Write name of service:"
-		tgb.Bot.Send(msg)
+		dialog.SetState(message.Chat.ID, dialog.State{
+			Type:  dialog.Get,
+			Name:  dialog.Service,
+			Value: "",
+		})
+		tgb.warningForExplosions(message.Chat.ID)
 	case "del":
 		msg.Text = "Ok. Write name of service:"
-		tgb.Bot.Send(msg)
+		dialog.SetState(message.Chat.ID, dialog.State{
+			Type:  dialog.Delete,
+			Name:  dialog.Service,
+			Value: "",
+		})
+		tgb.warningForExplosions(message.Chat.ID)
 	default:
 		msg.Text = "I don't know this command.\nYou must chose command from menu."
-		tgb.Bot.Send(msg)
 	}
+	send, err := tgb.Bot.Send(msg)
+	go tgb.delayedDelete(message.Chat.ID, send.MessageID)
 
-	return message.Command()
+	return message.Command(), err
 }
 
-func (tgb *TgBot) handleMessage(message *tgbotapi.Message, command string, db database.Database) error {
+func (tgb *TgBot) handleMessage(requestMessage *tgbotapi.Message) error {
 	var (
-		data model.Data
-		err  error
+		responseMessage tgbotapi.MessageConfig
+		err             error
 	)
-	msg := tgbotapi.NewMessage(message.Chat.ID, "")
-	switch command {
-	case "set":
-		if checkSetData(message) {
-			data.Add(message)
-			db.DataEntity.AddData(db.Pool, data)
-			msg.Text = "Ok. Your data has been saved."
-			tgb.Bot.Send(msg)
-			return nil
-		} else {
-			msg.Text = "Uncorrected data!"
-			tgb.Bot.Send(msg)
-			err = errors.New("uncorrected data")
-			return err
-		}
-	case "get":
-		if strings.Contains(message.Text, "Service ") || strings.Contains(message.Text, "Service: ") || strings.Contains(message.Text, "service ") || strings.Contains(message.Text, "service: ") {
-			service := model.SplitData(message.Text)
-			data, err = db.DataEntity.GetData(db.Pool, message.Chat.ID, service)
-			if err != nil {
-				msg.Text = "I think, you send uncorrected name of service!"
-				tgb.Bot.Send(msg)
-				return err
-			}
-			msg.Text = fmt.Sprintf("Service: %s\nLogin: %s\nPassword: %s\n", data.Service, data.Login, data.Password)
-			tgb.Bot.Send(msg)
-			return nil
-		} else {
-			data, err = db.DataEntity.GetData(db.Pool, message.Chat.ID, message.Text)
-			if err != nil {
-				msg.Text = "I think, you send uncorrected name of service!"
-				tgb.Bot.Send(msg)
-				return err
-			} else {
-				msg.Text = fmt.Sprintf("Service: %s\nLogin: %s\nPassword: %s\n", data.Service, data.Login, data.Password)
-				tgb.Bot.Send(msg)
-				return nil
-			}
-		}
-	case "del":
-		if strings.Contains(message.Text, "Service ") || strings.Contains(message.Text, "Service: ") || strings.Contains(message.Text, "service ") || strings.Contains(message.Text, "service: ") {
-			service := model.SplitData(message.Text)
-			data, err = db.DataEntity.GetData(db.Pool, message.Chat.ID, service)
-			if err != nil {
-				msg.Text = "I think, you send uncorrected name of service!"
-				tgb.Bot.Send(msg)
-				return err
-			} else {
-				msg.Text = fmt.Sprintf("I delete your data about %s", service)
-				tgb.Bot.Send(msg)
-				return nil
-			}
-		} else {
-			err = db.DataEntity.DelData(db.Pool, message.Chat.ID, message.Text)
-			if err != nil {
-				msg.Text = "I think, you send uncorrected name of service!"
-				tgb.Bot.Send(msg)
-				return err
-			} else {
-				msg.Text = fmt.Sprintf("I delete your data about %s", message.Text)
-				tgb.Bot.Send(msg)
-				return nil
-			}
-		}
+
+	go tgb.delayedDelete(requestMessage.Chat.ID, requestMessage.MessageID)
+	state := dialog.GetState(requestMessage.Chat.ID)
+	switch state.Type {
+	case dialog.Set:
+		responseMessage = set.HandleDialogSetMessage(requestMessage, &state, dao)
+	case dialog.Get:
+		responseMessage = get.HandleDialogGetMessage(requestMessage, &state, dao)
+	case dialog.Delete:
+		responseMessage = del.HandleDialogDeleteMessage(requestMessage, &state, dao)
 	default:
-		msg.Text = "I don't know this command.\nYou must chose command from menu."
-		tgb.Bot.Send(msg)
+		responseMessage = handler.HandleDialogDefaultResponse(requestMessage)
 	}
-	return nil
+	send, err := tgb.Bot.Send(responseMessage)
+	go tgb.delayedDelete(requestMessage.Chat.ID, send.MessageID)
+
+	return err
 }
 
-func checkSetData(message *tgbotapi.Message) bool {
-	if !strings.Contains(message.Text, "Service ") && !strings.Contains(message.Text, "service ") && !strings.Contains(message.Text, "Service: ") && !strings.Contains(message.Text, "service: ") {
-		return false
+func (tgb *TgBot) delayedDelete(chatId int64, messageId int) {
+	config := tgbotapi.DeleteMessageConfig{
+		ChatID:    chatId,
+		MessageID: messageId,
 	}
-	if !strings.Contains(message.Text, "Login ") && !strings.Contains(message.Text, "login ") && !strings.Contains(message.Text, "Login: ") && !strings.Contains(message.Text, "login: ") {
-		return false
-	}
-	if !strings.Contains(message.Text, "Password ") && !strings.Contains(message.Text, "password ") && !strings.Contains(message.Text, "Password: ") && !strings.Contains(message.Text, "password: ") {
-		return false
-	}
-	return true
+	time.Sleep(time.Second * 30)
+	tgb.Bot.DeleteMessage(config)
+}
+
+func (tgb *TgBot) warningForExplosions(chatId int64) {
+	response := tgbotapi.NewMessage(chatId, "🧨 Warning! All messages in this chat explode after 30 seconds!")
+	send, _ := tgb.Bot.Send(response)
+	go tgb.delayedDelete(chatId, send.MessageID)
 }

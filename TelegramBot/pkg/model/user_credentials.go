@@ -5,28 +5,28 @@ import (
 	"strings"
 )
 
-type Data struct {
+type UserCredentials struct {
 	ChatID   int64
 	Service  string
 	Login    string
 	Password string
 }
 
-func SplitData(str string) string {
+func SplitString(str string) string {
 	newstr := strings.Split(str, " ")
 
 	return newstr[1]
 }
 
-func (d *Data) Add(message *tgbotapi.Message) {
+func (d *UserCredentials) GetFromMessage(message *tgbotapi.Message) {
 	strs := strings.Split(message.Text, "\n")
 	d.ChatID = message.Chat.ID
-	d.Service = SplitData(strs[0])
-	d.Login = SplitData(strs[1])
-	d.Password = SplitData(strs[2])
+	d.Service = SplitString(strs[0])
+	d.Login = SplitString(strs[1])
+	d.Password = SplitString(strs[2])
 }
 
-func (d *Data) ParseData(value []interface{}) {
+func (d *UserCredentials) ParseColumns(value []interface{}) {
 	d.Service = value[2].(string)
 	d.Login = value[3].(string)
 	d.Password = value[4].(string)
